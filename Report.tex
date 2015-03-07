@@ -1,0 +1,99 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[english]{babel}
+\usepackage{my-math}
+\usepackage[margin=1.22in]{geometry}
+\usepackage{amssymb,amsmath,latexsym,mathtools,xcolor}
+\usepackage{cite}
+\usepackage[pdftex]{hyperref}
+\usepackage[all]{hypcap}
+\hypersetup{
+	colorlinks   = true, %Colours links instead of ugly boxes
+	urlcolor     = blue, %Colour for external hyperlinks
+	linkcolor    = blue, %Colour of internal links
+	citecolor   = red %Colour of citations
+}
+\usepackage{graphicx}
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
+\usepackage{float}
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input{./Title.tex}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Introduction} \label{sec:Intro}
+\paragraph{}
+A point cloud is set of points. 3D scanners produce point clouds by sampling the surface of real world objects. In order to create meaningful digital representations of these objects, the surface of these objects needs to be reconstructed from the point data. There are different approaches one may follow to reconstruct surfaces from point clouds. The Screened Poisson Surface Reconstruction algorithm presented in \cite{ScreenedPoisson} uses the approach of fitting an implicit function and is an improvement to the Poisson Surface Reconstruction algorithm presented in \cite{Poisson}. Poisson Surface Reconstruction tends to oversmooth the data and the approach used to solve the system of equations is quite inefficient. Therefore, the authors introduce a \textit{screening term} to overcome the problem with the oversmoothing and present an adaptive system to solve the system of equations which is faster than the method in \cite{Poisson}. It is important to know that both these methods create watertight surfaces only with \textit{oriented point sets}, i.e.\ every point in the point cloud \textbf{must} have an \textit{oriented surface normal} associated with it. If not, the point cloud data needs to be pre-processed and a surface normal must be estimated for every point in the set using ideas like in \cite{SurNormal}.
+
+   
+\section{Poisson Surface Reconstruction} \label{sec:PSR}
+\paragraph{}
+Poisson Surface Reconstruction presented in \cite{Poisson} creates water tight surfaces for \textit{oriented} point sets. It uses the method of fitting an implicit function. The sureface that needs to be reconstructed is estimated by an \textit{implicit function}. This implicit function, called as the \textit{indicator function} is mathematically represented as in equation (\ref{eq:1}).
+\begin{equation}
+\label{eq:1}
+  F(\mathbf{x}) = \twopartdefa {1} {\mathbf{x} \mbox{ is on the surface}} {0} {\mbox{otherwise}}
+\end{equation}
+\paragraph{}As mentioned earlier, this method requires that the given point set be oriented, i.e.\ every point in the set has an \textit{inward surface normal}. Therefore, these points can be seen as a sampling of a continuous vector field $\vec{V}$. To be able to reconstruct the surface, there must be some relationship between the indicator function $F$ and this vector field $\vec{V}$. The authors have proved in \cite{Poisson} that the vector field, $\vec{V}$ represents the gradient field of the indicator function $F$. Mathematically, it is given as in equation (\ref{eq:2}).
+\begin{equation}
+\label{eq:2}
+\vec{V} = \nabla F
+\end{equation}
+\paragraph{}Ultimately, the process of reconstruction boils down to finding the function $F$ whose gradient best approximates the vector field $\vec{V}$. This means, to obtain $F$, we need to integrate $\vec{V}$. For a vector field to be integrable, it needs to be curl free, i.e.\ $ \nabla \times \vec{V} \overset{!}{=} 0 $, which is not always the case and therefore an exact solution may not be possible. Therefore, least squares approximation is used to overcome this problem. This corresponds to solving for $F$ which minimizes the energy functional in equation (\ref{eq:3}), where $\mathbf{p}$ represents a point on the surface.
+\begin{equation}
+\label{eq:3}
+E(F) = \int \| \nabla F(\mathbf{p}) - \vec{V}(\mathbf{p}) \|^2 \mbox{ }d\mathbf{p}
+\end{equation}
+Tne Euler-Lagrange formulation of the equation (\ref{eq:3}) is a Poisson equation. The partial differential equation shown in equation (\ref{eq:4}), needs to solved, with Dirichlet Boundary Conditions (because the value of the function at the boundary is known.) . 
+\begin{equation}
+\label{eq:4}
+\Delta F= \nabla \cdot \vec{V}
+\end{equation}
+\paragraph{}
+To solve this, the authors choose to discretize the problem over an octree instead of a regular 3D grid and choose basis functions such that no two basis functions overlap, i.e.\ they all have local support. This leads to  the resulting system matrix to be sparse \cite{DBLP:journals/bioinformatics/KimVMSYLFMKRKHFT14}. A coarse to fine strategy is applied to solve the resulting linear system using a multigrid solver. Once the system is solved for $F$, the marching cubes algorithm \cite{MC} is used to obtain the isosurface. Due to the discretization over an octree, the \textbf{octree depth} and the \textbf{samples per node} parameters affect the quality of the reconstruction. Higher the value of the octree depth, better is the quality of the reconstruction. Samples per node is the count of the number of points in every node of the octree. A high value of samples per node results in a smoothing and loss of data and lower values result in reconstructions of higher quality. The runtime of the solver used here goes up by a factor of 4 for every unit increase in the octree depth. As mentioned earlier, this approach tends to oversmooth the data. The Poisson Solver presented in \cite{Poisson} has a log linear complexity with respect to the number of points. Therefore improvements were proposed to this method which overcome these problems while maintaining the sparse nature of the system matrix.
+
+\section{Screened Poisson Surface Reconstruction} \label{sec:SPSR}
+\paragraph{}The Screened Poisson Surface Reconstruction method proposed in \cite{ScreenedPoisson} is an extension of the method proposed in \cite{Poisson} and generalizes the underlying mathematical framework by introducing an additional constraint, which is called as the \textit{screening term}. The authors also propose a modification to the octree structure and present an adaptive solver whose runtime is linear in the number of points and whose results are of higher fidelity at the same triangle count as the previous approach.
+\paragraph{}To obtain the energy functional for the Screened Poisson Surface Reconstruction, the authors just include an additional constraint to the energy functional obtained from the previous method (cf. equation \ref{eq:3}). The modified energy functional looks like in equation (\ref{eq:5}), where the parameter $\lambda$, known as the \textit{screening weight}, tells how strongly this constraint is enforced, therefore, this parameter needs to be set very carefully. $\mathbf{p}$ is a point on the surface and $\mathbf{q} \in Q$ is a point from the sampled data.
+\begin{equation}
+\label{eq:5}
+E(F) = \int \| \nabla F(\mathbf{p}) - \vec{V}(\mathbf{p}) \|^2 \mbox{ }d\mathbf{p} +  \underbrace{\lambda \sum_{\mathbf{q} \in Q} \| F(\mathbf{q}) \|^2}_\text{Screening Term}
+\end{equation}
+\paragraph{}The original Poisson surface reconstruction formulation (cf. equation (\ref{eq:3}))adjusts the implicit function using a single global offset such that its average value over all points is zero. But due to the presence of noise in the data, the implicit function may drift in way such that no global offset is satisfactory \cite{ScreenedPoisson}. Therefore, the authors explicitly enforce the constraint that the implicit function, $F$ is zero at the sample points ($\mathbf{q} \in Q$ stands for those points which are a part of the set of sampled points). In a least square sense, this constraint appears as the \textit{screening term} in the energy functional equation (\ref{eq:5}). It is clear that when $\lambda = 0$, the original Poisson Surface Reconstruction functional (cf. equation (\ref{eq:3})) is obtained.
+
+\paragraph{}
+It is important to know that with this approach the added energy is still positive and quadratic, so the system is still characterized by a symmetric positive definite matrix, and the same multigrid hierarchy used to solve the original Poisson equation can be used to solve the screened equation. On the other hand, the modified energy is inhomogeneous, making it more difficult to formulate and solve the system efficiently. The sparsity of the system matrix remains unchanged, because a matrix entry will only be modified if the original, unscreened coefficient was non-zero. Now the matrix coefficients depend not only the relative position of the cells, but also on how the point samples are distributed within them.
+This makes defining the linear system inefficient because the matrix cannot be represented by a fixed stencil. Since a coarse to fine approach is used to solve the linear system, the definition of the coarser matrix entries becomes computationally expensive, as more points fall within the supports of the basis functions at coarser depths.
+
+
+
+\paragraph{}This screening weight must be adjusted such that the corresponding reconstructed surface shape is invariant under scaling of the input points with respect to the solver domain and the prolongation of a solution at a coarser depth is an accurate estimate of the solution at a finer depth in the cascadic multigrid Poisson solver. Both these goals are achieved by adjusting the relative weighting of the screening constraint and the gradient constraints across different octree depths. To account for the adaptive nature of the octree, the authors propose the octrees to be conforming. This allows the solution at depths $\{0,\dotsc,d-1\}$ to be visible to a node at depth $d$. This inturn leads to an improvement in the complexity of the solver.
+
+\paragraph{}Since a coarse to fine approach is used to solve the system, one problem that needs to be addressed is that the basis functions overlap at coarser resolutions. This will lead to a denser system matrix, while it is essential to keep this matrix sparse. To this end, the authors propose a hierarchical clustering of sample points. That is, at coarser resolutions, fewer, but smoother basis functions are used. A weighted average of the many sample points that fall within a cell is taken instead of treating each point individually.
+
+
+
+\paragraph{Discussion} 
+In the seminar, a live demonstration of the Screened Poisson Reconstruction was shown and the impact of all various parameters were discussed. The tool MeshLab \cite{MLAB} was used to view the dataset and also to view the results. 
+\begin{itemize}
+\item  As in the Poisson Surface Resonctruction method, the user will have to carefully choose the \textit{octree depth} and the \textit{samples per node} parameters here as well. The screened Poisson Reconstruction method requires the user to input an \textbf{additional parameter}, the screening weight, $\lambda$. The authors in \cite{ScreenedPoisson} mention that a value of 4 for the screening weight suits several different datasets.
+\item While the main reason behind the inclusion of the screening term was to introduce some resilience to noise, in some cases, when the data contains significant amounts of noise and misalignment, this method leads to undesirable results due to \textbf{overfitting}. In such situations, the method produces surfaces that interpolate these artifacts. This was the reason why the some of the results appeared to be less smooth than the ones created using the unscreened Poisson reconstruction approach. The effect is even more clear for higher values of the screening weight.
+\item Not all of the point cloud data sets were oriented. In such cases, the inward surface normals were estimated using the tools available within the MeshLab package to be able to apply the Screened Poisson Surface Reconstruction.
+\end{itemize}
+
+\section{Conclusion}
+\paragraph{}
+Poisson Surface Reconstruction is a popular method that works well with oriented point clouds. It has become a standard part of several surface processing tools and packages such as MeshLab \cite{MLAB}, CGAL \cite{cgal:eb-15a} etc. The authors of \cite{ScreenedPoisson} propose an improvement to their previous work in \cite{Poisson} by including a screening term and also including changes to improve the time complexity of the solver. The proposed method is significantly faster than the previous method, but the user has to carefully choose the value of the screening weight depending on the quality of the dataset. The improved version was tested with different datasets and the quality and efficiency of this method was seen to be indeed better, as mentioned in \cite{ScreenedPoisson}. But if the dataset is very noisy and has many outliers, the results may not be smooth due to the overfitting as explained earlier. 
+
+\paragraph{}The algorithm can be further improved by parallalizing it for use on the GPU. This comes with several challenges as mentioned in  \cite{Bolitho:2009:PPS:1696121.1696195} which describes a parallel implementation of the original (unscreened) Poisson Surface Reconstruction method. But the inclusion of the screening term has its impact because the functional becomes data dependent and the same idea of data decomposition described in \cite{Bolitho:2009:PPS:1696121.1696195} may not work well here. Since several Poisson problems are solved using FFT based solvers, one possibility to explore is the use of FFT based solvers for the screened Poisson equation, which even though may not compare to the fastest solvers which are available, but are able to scale well. A report on the current advances in these topics is mentioned in \cite{egst.20141040}.
+
+\bibliographystyle{ieeetr}
+\bibliography{Report_Bibliography}
+
+
+
+
+\end{document}
+
